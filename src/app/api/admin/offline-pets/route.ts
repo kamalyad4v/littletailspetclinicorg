@@ -37,22 +37,52 @@ export async function POST(request: NextRequest) {
     }
 
     // Find or create the owner user
+    // 1. Try to find by phone first
     let owner = await prisma.user.findUnique({ where: { phone: ownerPhone } });
+
+    // 2. If not found by phone, try by email (prevents duplicate email crash)
+    if (!owner && ownerEmail) {
+      owner = await prisma.user.findUnique({ where: { email: ownerEmail } });
+      if (owner) {
+        // Update phone if missing
+        if (!owner.phone) {
+          owner = await prisma.user.update({
+            where: { id: owner.id },
+            data: { phone: ownerPhone },
+          });
+        }
+      }
+    }
 
     if (!owner) {
       // Create a new user account for the pet parent
       const tempPassword = await hashPassword(ownerPassword && ownerPassword.length >= 6 ? ownerPassword : `LittleTails@${Math.random().toString(36).slice(2, 8)}`);
-      owner = await prisma.user.create({
-        data: {
-          email: ownerEmail || null,
-          password: tempPassword,
-          firstName: ownerFirstName,
-          lastName: ownerLastName,
-          phone: ownerPhone,
-          role: 'USER',
-          isActive: true,
-        },
-      });
+      try {
+        owner = await prisma.user.create({
+          data: {
+            email: ownerEmail || null,
+            password: tempPassword,
+            firstName: ownerFirstName,
+            lastName: ownerLastName,
+            phone: ownerPhone,
+            role: 'USER',
+            isActive: true,
+          },
+        });
+      } catch (createErr: unknown) {
+        // Handle race condition: email taken between our check and the create
+        const isPrismaUniqueError = typeof createErr === 'object' && createErr !== null && 'code' in createErr && (createErr as { code: string }).code === 'P2002';
+        if (isPrismaUniqueError && ownerEmail) {
+          const existing = await prisma.user.findUnique({ where: { email: ownerEmail } });
+          if (existing) {
+            owner = existing;
+          } else {
+            throw createErr;
+          }
+        } else {
+          throw createErr;
+        }
+      }
     } else {
       // Update email if provided and not already set
       if (ownerEmail && !owner.email) {
@@ -62,6 +92,7 @@ export async function POST(request: NextRequest) {
         });
       }
     }
+
 
     // Create the pet linked to the owner
     const pet = await prisma.pet.create({
