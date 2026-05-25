@@ -415,14 +415,14 @@ export async function sendAppointmentStatusEmail(data: StatusUpdateEmailData) {
   return sendMail({ to: data.to, subject, html });
 }
 
-interface PasswordResetEmailData {
+interface OtpEmailData {
   to: string;
   userName: string;
-  resetUrl: string;
+  otp: string;
 }
 
-export async function sendPasswordResetEmail(data: PasswordResetEmailData) {
-  const subject = '🔒 Reset Your Password | Little Tails Pet Clinic';
+export async function sendOtpEmail(data: OtpEmailData) {
+  const subject = '🔐 Your Password Reset OTP | Little Tails Pet Clinic';
   const html = `
 <!DOCTYPE html>
 <html>
@@ -440,32 +440,35 @@ export async function sendPasswordResetEmail(data: PasswordResetEmailData) {
 
     <!-- Body -->
     <div style="background:#fff;padding:32px;border-left:1px solid #DDE3EC;border-right:1px solid #DDE3EC;">
-      <h2 style="color:#1A2332;margin:0 0 8px;font-size:20px;">Reset Your Password</h2>
-      <p style="color:#5F6B7A;margin:0 0 24px;font-size:15px;">
-        Hello <strong>${data.userName}</strong>, we received a request to reset the password for your account.
+      <h2 style="color:#1A2332;margin:0 0 8px;font-size:20px;">Password Reset OTP 🔐</h2>
+      <p style="color:#5F6B7A;margin:0 0 28px;font-size:15px;">
+        Hello <strong>${data.userName}</strong>, use the OTP below to reset your password.
       </p>
 
-      <!-- Reset Button -->
-      <div style="text-align:center;margin:32px 0;">
-        <a href="${data.resetUrl}" style="display:inline-block;background-color:#1565C0;color:#ffffff;padding:12px 32px;border-radius:8px;font-size:15px;font-weight:700;text-decoration:none;box-shadow:0 4px 6px rgba(21,101,192,0.15);">
-          🔑 Reset Password
-        </a>
+      <!-- OTP Box -->
+      <div style="text-align:center;margin:0 0 28px;">
+        <div style="display:inline-block;background:linear-gradient(135deg,#E3F2FD,#EBF5FB);border:2px solid #90CAF9;border-radius:16px;padding:24px 40px;">
+          <p style="color:#5F6B7A;margin:0 0 8px;font-size:13px;font-weight:600;letter-spacing:1px;">YOUR OTP CODE</p>
+          <div style="font-size:42px;font-weight:900;letter-spacing:10px;color:#1565C0;font-family:monospace;">
+            ${data.otp}
+          </div>
+        </div>
       </div>
 
-      <!-- Link details -->
-      <p style="color:#5F6B7A;font-size:14px;margin-bottom:24px;">
-        If you are having trouble clicking the button above, copy and paste the link below into your web browser:
-      </p>
-      <p style="color:#1565C0;font-size:13px;word-break:break-all;">
-        <a href="${data.resetUrl}" style="color:#1565C0;text-decoration:underline;">${data.resetUrl}</a>
-      </p>
-
       <!-- Warning -->
-      <div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:8px;padding:16px;margin:24px 0;">
-        <p style="color:#F57F17;margin:0;font-size:13px;font-weight:600;">⚠️ Security Notice</p>
-        <p style="color:#5F6B7A;margin:4px 0 0;font-size:13px;">
-          This link will expire in 1 hour. If you did not request a password reset, please ignore this email. Your password will remain secure.
+      <div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:10px;padding:16px;margin-bottom:24px;">
+        <p style="color:#F57F17;margin:0 0 4px;font-size:13px;font-weight:700;">⏱️ This OTP expires in 10 minutes</p>
+        <p style="color:#5F6B7A;margin:0;font-size:13px;">
+          If you did not request a password reset, please ignore this email. Your account is safe.
         </p>
+      </div>
+
+      <!-- Steps -->
+      <div style="background:#F5F7FA;border:1px solid #DDE3EC;border-radius:10px;padding:16px;margin-bottom:24px;">
+        <p style="color:#1A2332;margin:0 0 10px;font-size:13px;font-weight:700;">How to use:</p>
+        <p style="color:#5F6B7A;margin:4px 0;font-size:13px;">1. Go back to the forgot password page</p>
+        <p style="color:#5F6B7A;margin:4px 0;font-size:13px;">2. Enter the 6-digit OTP above</p>
+        <p style="color:#5F6B7A;margin:4px 0;font-size:13px;">3. Set your new password</p>
       </div>
 
       <!-- Clinic Info -->
@@ -488,3 +491,15 @@ export async function sendPasswordResetEmail(data: PasswordResetEmailData) {
 
   return sendMail({ to: data.to, subject, html });
 }
+
+// Keep for backward compatibility (no longer used in main flow)
+interface PasswordResetEmailData {
+  to: string;
+  userName: string;
+  resetUrl: string;
+}
+
+export async function sendPasswordResetEmail(data: PasswordResetEmailData) {
+  return sendOtpEmail({ to: data.to, userName: data.userName, otp: '------' });
+}
+

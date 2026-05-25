@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import crypto from 'crypto';
-import { sendPasswordResetEmail } from '@/lib/email';
+import { sendOtpEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,13 +11,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Find user by email
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
+    const user = await prisma.user.findUnique({ where: { email } });
 
     if (!user) {
       return NextResponse.json(
-        { error: 'An account with this email address does not exist' },
+        { error: 'No account found with this email address' },
         { status: 404 }
       );
     }
@@ -28,47 +25,36 @@ export async function POST(request: NextRequest) {
       where: { userId: user.id, usedAt: null },
     });
 
-    // Generate a secure random token
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
+    // Generate a 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 10); // 10 minutes
 
     await prisma.passwordResetToken.create({
       data: {
-        token: rawToken,
+        token: otp,
         userId: user.id,
         expiresAt,
       },
     });
 
-    // Build the reset URL using the actual request origin so it works on any host
-    // (prevents the localhost-in-email bug when deployed to Vercel/Render/etc.)
-    const origin =
-      request.headers.get('x-forwarded-host')
-        ? `${request.headers.get('x-forwarded-proto') || 'https'}://${request.headers.get('x-forwarded-host')}`
-        : request.headers.get('origin') ||
-          process.env.NEXT_PUBLIC_APP_URL ||
-          'http://localhost:3000';
-    const resetUrl = `${origin}/reset-password?token=${rawToken}`;
-
-    // Send email using Nodemailer
-    const mailResult = await sendPasswordResetEmail({
+    // Send OTP email
+    const mailResult = await sendOtpEmail({
       to: email,
       userName: `${user.firstName} ${user.lastName}`,
-      resetUrl,
+      otp,
     });
 
     if (!mailResult.success) {
       return NextResponse.json(
-        { error: 'Failed to send password reset email' },
+        { error: 'Failed to send OTP email. Please try again.' },
         { status: 500 }
       );
     }
 
-    console.log(`[Password Reset] Reset URL for ${email}: ${resetUrl}`);
+    console.log(`[OTP] Sent to ${email}: ${otp}`);
 
     return NextResponse.json({
-      message: 'Password reset link has been sent to your email address.',
-      devResetUrl: process.env.NODE_ENV !== 'production' ? resetUrl : undefined,
+      message: 'OTP sent successfully to your email.',
     });
   } catch (error) {
     console.error('Forgot password error:', error);
