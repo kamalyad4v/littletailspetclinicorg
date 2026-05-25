@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 
+import { medicineSchema } from '@/lib/validators';
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -15,11 +17,20 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
+    const validationResult = medicineSchema.safeParse(body);
+    if (!validationResult.success) {
+      return NextResponse.json(
+        { error: validationResult.error.issues[0].message },
+        { status: 400 }
+      );
+    }
+
+    const data = validationResult.data;
     const medicine = await prisma.medicine.update({
       where: { id },
       data: {
-        ...body,
-        expiryDate: body.expiryDate ? new Date(body.expiryDate) : undefined,
+        ...data,
+        expiryDate: data.expiryDate ? new Date(data.expiryDate) : null,
       },
     });
 

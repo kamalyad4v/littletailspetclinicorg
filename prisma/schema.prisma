@@ -169,13 +169,13 @@ model Medicine {
   name          String
   category      String
   description   String?
-  quantity       Int       @default(0)
+  quantity       String    @default("0")
   unit          String
   price         Float
   expiryDate    DateTime?
   manufacturer  String?
   batchNumber   String?
-  minStock      Int       @default(10)
+  minStock      String    @default("10")
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

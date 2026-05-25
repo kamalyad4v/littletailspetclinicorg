@@ -43,13 +43,13 @@ export const medicineSchema = z.object({
   name: z.string().min(1, 'Medicine name is required'),
   category: z.string().min(1, 'Category is required'),
   description: z.string().optional(),
-  quantity: z.number().min(0, 'Quantity must be positive'),
+  quantity: z.string().min(1, 'Quantity is required'),
   unit: z.string().min(1, 'Unit is required'),
   price: z.number().min(0, 'Price must be positive'),
   expiryDate: z.string().optional(),
   manufacturer: z.string().optional(),
   batchNumber: z.string().optional(),
-  minStock: z.number().min(0).optional(),
+  minStock: z.string().optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

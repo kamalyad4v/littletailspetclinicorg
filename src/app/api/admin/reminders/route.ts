@@ -135,12 +135,25 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH batch send all due reminders (admin only)
+// PATCH batch send all due reminders (admin or cron)
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session || session.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    const authHeader = request.headers.get('authorization');
+    const schedulerSecret = process.env.SCHEDULER_SECRET;
+
+    let isAuthorized = false;
+
+    if (schedulerSecret && authHeader === `Bearer ${schedulerSecret}`) {
+      isAuthorized = true;
+    } else {
+      const session = await getSession();
+      if (session && session.role === 'ADMIN') {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const now = new Date();

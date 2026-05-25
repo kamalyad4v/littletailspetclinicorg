@@ -9,7 +9,7 @@ import Input from '@/components/ui/Input';
 import Modal from '@/components/ui/Modal';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { Plus, Pencil, Trash2, AlertTriangle, Package } from 'lucide-react';
-import { formatDate } from '@/lib/utils';
+import { formatDate, parseQuantityNumber } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 interface Medicine {
@@ -17,13 +17,13 @@ interface Medicine {
   name: string;
   category: string;
   description?: string;
-  quantity: number;
+  quantity: string;
   unit: string;
   price: number;
   expiryDate?: string;
   manufacturer?: string;
   batchNumber?: string;
-  minStock: number;
+  minStock: string;
 }
 
 export default function AdminMedicinePage() {
@@ -33,9 +33,9 @@ export default function AdminMedicinePage() {
   const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: '', category: '', description: '', quantity: 0,
+    name: '', category: '', description: '', quantity: '',
     unit: 'tablets', price: 0, expiryDate: '', manufacturer: '',
-    batchNumber: '', minStock: 10,
+    batchNumber: '', minStock: '10',
   });
 
   const fetchMedicines = async () => {
@@ -56,19 +56,19 @@ export default function AdminMedicinePage() {
 
   const resetForm = () => {
     setFormData({
-      name: '', category: '', description: '', quantity: 0,
+      name: '', category: '', description: '', quantity: '',
       unit: 'tablets', price: 0, expiryDate: '', manufacturer: '',
-      batchNumber: '', minStock: 10,
+      batchNumber: '', minStock: '10',
     });
   };
 
   const openEdit = (med: Medicine) => {
     setFormData({
       name: med.name, category: med.category, description: med.description || '',
-      quantity: med.quantity, unit: med.unit, price: med.price,
+      quantity: med.quantity.toString(), unit: med.unit, price: med.price,
       expiryDate: med.expiryDate ? med.expiryDate.split('T')[0] : '',
       manufacturer: med.manufacturer || '', batchNumber: med.batchNumber || '',
-      minStock: med.minStock,
+      minStock: med.minStock.toString(),
     });
     setEditingMedicine(med);
     setShowModal(true);
@@ -86,9 +86,9 @@ export default function AdminMedicinePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
-          quantity: Number(formData.quantity),
+          quantity: String(formData.quantity),
           price: Number(formData.price),
-          minStock: Number(formData.minStock),
+          minStock: String(formData.minStock),
         }),
       });
       if (!res.ok) throw new Error('Failed');
@@ -110,7 +110,7 @@ export default function AdminMedicinePage() {
     } catch { toast.error('Failed to delete'); }
   };
 
-  const lowStockMeds = medicines.filter(m => m.quantity <= m.minStock);
+  const lowStockMeds = medicines.filter(m => parseQuantityNumber(m.quantity) <= parseQuantityNumber(m.minStock));
   const categories = [...new Set(medicines.map(m => m.category))];
 
   if (loading) return <LoadingSpinner size="lg" />;
@@ -184,7 +184,7 @@ export default function AdminMedicinePage() {
             </div>
             <div>
               <p className="text-xl font-bold text-[var(--color-text)]">
-                ₹{medicines.reduce((sum, m) => sum + m.price * m.quantity, 0).toLocaleString()}
+                ₹{medicines.reduce((sum, m) => sum + m.price * parseQuantityNumber(m.quantity), 0).toLocaleString()}
               </p>
               <p className="text-xs text-[var(--color-text-secondary)]">Total Value</p>
             </div>
@@ -231,11 +231,11 @@ export default function AdminMedicinePage() {
                   </td>
                   <td className="px-4 py-4">
                     <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${
-                      med.quantity <= med.minStock
+                      parseQuantityNumber(med.quantity) <= parseQuantityNumber(med.minStock)
                         ? 'bg-red-100 text-red-700'
                         : 'bg-emerald-100 text-emerald-700'
                     }`}>
-                      {med.quantity <= med.minStock ? 'Low Stock' : 'In Stock'}
+                      {parseQuantityNumber(med.quantity) <= parseQuantityNumber(med.minStock) ? 'Low Stock' : 'In Stock'}
                     </span>
                   </td>
                   <td className="px-4 py-4">
@@ -268,7 +268,7 @@ export default function AdminMedicinePage() {
             <Input label="Category *" placeholder="Antibiotics" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} required />
           </div>
           <div className="grid sm:grid-cols-3 gap-4">
-            <Input label="Quantity *" type="number" min="0" value={formData.quantity.toString()} onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })} required />
+            <Input label="Quantity *" type="text" placeholder="e.g., 4^5 or 4*100" value={formData.quantity} onChange={(e) => setFormData({ ...formData, quantity: e.target.value })} required />
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-[var(--color-text)]">Unit *</label>
               <select
@@ -276,7 +276,7 @@ export default function AdminMedicinePage() {
                 value={formData.unit}
                 onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
               >
-                {['tablets', 'capsules', 'units', 'mg', 'bottles', 'vials', 'tubes', 'packets'].map(u => (
+                {['tablets', 'capsules', 'units', 'mg', 'bottles', 'vials', 'tubes', 'packets', 'injection'].map(u => (
                   <option key={u} value={u}>{u}</option>
                 ))}
               </select>
@@ -284,7 +284,7 @@ export default function AdminMedicinePage() {
             <Input label="Price (₹) *" type="number" step="0.01" min="0" value={formData.price.toString()} onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })} required />
           </div>
           <div className="grid sm:grid-cols-3 gap-4">
-            <Input label="Min Stock" type="number" min="0" value={formData.minStock.toString()} onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) || 0 })} />
+            <Input label="Min Stock" type="text" placeholder="e.g., 10" value={formData.minStock} onChange={(e) => setFormData({ ...formData, minStock: e.target.value })} />
             <Input label="Expiry Date" type="date" value={formData.expiryDate} onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })} />
             <Input label="Batch Number" placeholder="BN-001" value={formData.batchNumber} onChange={(e) => setFormData({ ...formData, batchNumber: e.target.value })} />
           </div>

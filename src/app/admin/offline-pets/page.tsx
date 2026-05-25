@@ -5,7 +5,6 @@ export const dynamic = 'force-dynamic';
 import React, { useState, useEffect, useRef } from 'react';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import {
   PawPrint, UserCheck, UserPlus, Mail, Phone,
   CheckCircle2, ChevronRight, ChevronLeft, Sparkles,
@@ -166,6 +165,7 @@ export default function OfflinePetsPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-lookup owner when phone is typed
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!ownerPhone || ownerPhone.length < 10) {
       setExistingOwner(null);
@@ -198,6 +198,7 @@ export default function OfflinePetsPage() {
     }, 600);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [ownerPhone]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const goToStep = (next: Step) => {
     setVisible(false);
@@ -392,6 +393,20 @@ export default function OfflinePetsPage() {
                       onChange={(e) => setOwnerInfo(p => ({ ...p, phone: e.target.value }))}
                       icon={<Phone size={16} />}
                     />
+                    <div className="space-y-1.5">
+                      <Input
+                        label="Email Address (for reminders & alerts)"
+                        type="email"
+                        placeholder="owner@example.com"
+                        value={ownerInfo.email}
+                        onChange={(e) => setOwnerInfo(p => ({ ...p, email: e.target.value }))}
+                        icon={<Mail size={16} />}
+                      />
+                      <p className="text-[10px] text-[var(--color-text-secondary)] flex items-center gap-1 pl-1">
+                        <Mail size={10} />
+                        Email is used to send vaccination reminders and health alerts
+                      </p>
+                    </div>
                   </div>
                 )}
 

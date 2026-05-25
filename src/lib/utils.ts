@@ -1,6 +1,4 @@
-import { type ClassValue, clsx } from 'clsx';
-
-export function cn(...inputs: ClassValue[]) {
+export function cn(...inputs: (string | undefined | null | false)[]) {
   return inputs.filter(Boolean).join(' ');
 }
 
@@ -55,4 +53,11 @@ export function generateRegistrationNumber(): string {
   const timestamp = Date.now().toString(36).toUpperCase();
   const random = Math.random().toString(36).substring(2, 6).toUpperCase();
   return `${prefix}-${timestamp}-${random}`;
+}
+
+export function parseQuantityNumber(val: string | number | undefined | null): number {
+  if (val === undefined || val === null) return 0;
+  if (typeof val === 'number') return val;
+  const match = String(val).trim().match(/^(\d+)/);
+  return match ? parseInt(match[1]) : 0;
 }

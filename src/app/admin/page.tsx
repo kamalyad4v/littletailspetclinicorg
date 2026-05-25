@@ -6,7 +6,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Card from '@/components/ui/Card';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { Users, Dog, Calendar, Clock, CheckCircle, TrendingUp, ArrowRight, Phone, Stethoscope, CalendarCheck, Syringe, AlertCircle } from 'lucide-react';
+import { Users, Dog, Calendar, Clock, CheckCircle, TrendingUp, ArrowRight, Phone, CalendarCheck, Syringe, AlertCircle, Search } from 'lucide-react';
 import { formatDate, formatTime, getStatusColor, getServiceLabel } from '@/lib/utils';
 
 interface TodayAppointment {
@@ -28,6 +28,7 @@ interface VaccinationReminder {
   nextDueDate: string;
   pet: {
     id: string;
+    registrationNo: string;
     name: string;
     species: string;
     breed: string;
@@ -70,6 +71,8 @@ export default function AdminDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAllReminders, setShowAllReminders] = useState(false);
 
   useEffect(() => {
     async function fetchStats() {
@@ -104,6 +107,16 @@ export default function AdminDashboardPage() {
 
   // Vaccination reminders
   const vaccinationReminders = data?.upcomingVaccinationReminders || [];
+  const filteredReminders = vaccinationReminders.filter(v => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return true;
+    const petName = v.pet.name.toLowerCase();
+    const regNo = v.pet.registrationNo ? v.pet.registrationNo.toLowerCase() : '';
+    const ownerName = `${v.pet.owner.firstName} ${v.pet.owner.lastName}`.toLowerCase();
+    const phone = v.pet.owner.phone ? v.pet.owner.phone.toLowerCase() : '';
+    const vaccine = v.vaccineName.toLowerCase();
+    return petName.includes(query) || regNo.includes(query) || ownerName.includes(query) || phone.includes(query) || vaccine.includes(query);
+  });
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const overdueCount = vaccinationReminders.filter(v => new Date(v.nextDueDate) < today).length;
@@ -206,7 +219,7 @@ export default function AdminDashboardPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {todaysAppointments.map((apt, index) => (
+              {todaysAppointments.map((apt) => (
                 <div
                   key={apt.id}
                   className={`bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10 hover:bg-white/15 transition-all duration-200 ${
@@ -324,83 +337,122 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            <div className="space-y-3">
-              {vaccinationReminders.map((vax) => {
-                const dueDate = new Date(vax.nextDueDate);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                const isOverdue = diffDays < 0;
-                const isDueSoon = diffDays >= 0 && diffDays <= 30;
-
-                return (
-                  <div
-                    key={vax.id}
-                    className={`flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl border transition-all hover:shadow-md ${
-                      isOverdue
-                        ? 'bg-red-50 border-red-200 hover:border-red-300'
-                        : isDueSoon
-                        ? 'bg-amber-50 border-amber-200 hover:border-amber-300'
-                        : 'bg-[#F5F7FA] border-[#DDE3EC] hover:border-blue-200'
-                    }`}
-                  >
-                    {/* Pet Info */}
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
-                        isOverdue ? 'bg-red-100' : isDueSoon ? 'bg-amber-100' : 'bg-blue-100'
-                      }`}>
-                        {petEmoji(vax.pet.species)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-bold text-[#1A2332]">
-                            {vax.pet.name}
-                          </p>
-                          <span className="text-xs text-[#5F6B7A]">{vax.pet.breed}</span>
-                        </div>
-                        <p className="text-xs text-[#5F6B7A]">
-                          💉 {vax.vaccineName} • Last: {formatDate(vax.dateAdministered)}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Owner */}
-                    <div className="flex items-center gap-3 sm:w-auto">
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-[#1A2332]">
-                          {vax.pet.owner.firstName} {vax.pet.owner.lastName}
-                        </p>
-                        {vax.pet.owner.phone && (
-                          <a href={`tel:${vax.pet.owner.phone}`} className="text-xs text-[#5F6B7A] hover:text-[#1565C0] flex items-center gap-1 justify-end">
-                            <Phone size={10} />
-                            {vax.pet.owner.phone}
-                          </a>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Due Date Badge */}
-                    <div className="sm:w-auto">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold ${
-                        isOverdue
-                          ? 'bg-red-600 text-white shadow-sm shadow-red-500/30'
-                          : isDueSoon
-                          ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
-                          : 'bg-blue-100 text-blue-700 border border-blue-200'
-                      }`}>
-                        {isOverdue ? (
-                          <><AlertCircle size={12} /> {Math.abs(diffDays)} day{Math.abs(diffDays) !== 1 ? 's' : ''} overdue</>
-                        ) : diffDays === 0 ? (
-                          <><AlertCircle size={12} /> Due Today</>
-                        ) : (
-                          <><Calendar size={12} /> Due: {formatDate(vax.nextDueDate)}</>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+            {/* Search Bar */}
+            <div className="relative mb-4">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-[#5F6B7A]/50">
+                <Search size={16} />
+              </span>
+              <input
+                type="text"
+                placeholder="Search by pet name, registration no. or owner's phone..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border border-[#DDE3EC] bg-white text-[#1A2332] placeholder:text-[#5F6B7A]/50 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all shadow-sm"
+              />
             </div>
+
+            <div className="space-y-3">
+              {filteredReminders.length === 0 ? (
+                <div className="text-center py-8 text-sm text-[#5F6B7A] bg-[#F5F7FA] border border-[#DDE3EC] rounded-xl">
+                  No matching reminders found
+                </div>
+              ) : (
+                (showAllReminders ? filteredReminders : filteredReminders.slice(0, 5)).map((vax) => {
+                  const dueDate = new Date(vax.nextDueDate);
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                  const isOverdue = diffDays < 0;
+                  const isDueSoon = diffDays >= 0 && diffDays <= 30;
+
+                  return (
+                    <div
+                      key={vax.id}
+                      className={`flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl border transition-all hover:shadow-md ${
+                        isOverdue
+                          ? 'bg-red-50 border-red-200 hover:border-red-300'
+                          : isDueSoon
+                          ? 'bg-amber-50 border-amber-200 hover:border-amber-300'
+                          : 'bg-[#F5F7FA] border-[#DDE3EC] hover:border-blue-200'
+                      }`}
+                    >
+                      {/* Pet Info */}
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
+                          isOverdue ? 'bg-red-100' : isDueSoon ? 'bg-amber-100' : 'bg-blue-100'
+                        }`}>
+                          {petEmoji(vax.pet.species)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-bold text-[#1A2332]">
+                              {vax.pet.name}
+                            </p>
+                            {vax.pet.registrationNo && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                {vax.pet.registrationNo}
+                              </span>
+                            )}
+                            <span className="text-xs text-[#5F6B7A]">{vax.pet.breed}</span>
+                          </div>
+                          <p className="text-xs text-[#5F6B7A]">
+                            💉 {vax.vaccineName} • Last: {formatDate(vax.dateAdministered)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Owner */}
+                      <div className="flex items-center gap-3 sm:w-auto">
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-[#1A2332]">
+                            {vax.pet.owner.firstName} {vax.pet.owner.lastName}
+                          </p>
+                          {vax.pet.owner.phone && (
+                            <a href={`tel:${vax.pet.owner.phone}`} className="text-xs text-[#5F6B7A] hover:text-[#1565C0] flex items-center gap-1 justify-end">
+                              <Phone size={10} />
+                              {vax.pet.owner.phone}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Due Date Badge */}
+                      <div className="sm:w-auto">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold ${
+                          isOverdue
+                            ? 'bg-red-600 text-white shadow-sm shadow-red-500/30'
+                            : isDueSoon
+                            ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+                            : 'bg-blue-100 text-blue-700 border border-blue-200'
+                        }`}>
+                          {isOverdue ? (
+                            <><AlertCircle size={12} /> {Math.abs(diffDays)} day{Math.abs(diffDays) !== 1 ? 's' : ''} overdue</>
+                          ) : diffDays === 0 ? (
+                            <><AlertCircle size={12} /> Due Today</>
+                          ) : (
+                            <><Calendar size={12} /> Due: {formatDate(vax.nextDueDate)}</>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* View All Option */}
+            {filteredReminders.length > 5 && (
+              <div className="mt-4 text-center">
+                <button
+                  type="button"
+                  onClick={() => setShowAllReminders(!showAllReminders)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100/80 border border-amber-200 rounded-xl transition-all shadow-sm cursor-pointer"
+                >
+                  {showAllReminders ? 'Show Less' : `View All (${filteredReminders.length - 5} more)`}
+                  <ArrowRight size={12} className={`transition-transform duration-200 ${showAllReminders ? '-rotate-90' : 'rotate-90'}`} />
+                </button>
+              </div>
+            )}
           </div>
         </Card>
       )}

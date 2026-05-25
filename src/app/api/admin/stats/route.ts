@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
+import { parseQuantityNumber } from '@/lib/utils';
 
 export async function GET() {
   try {
@@ -22,7 +23,7 @@ export async function GET() {
       pendingAppointments,
       approvedAppointments,
       completedAppointments,
-      lowStockMedicines,
+      medicinesForLowStock,
       recentAppointments,
       recentUsers,
       todaysAppointments,
@@ -34,11 +35,9 @@ export async function GET() {
       prisma.appointment.count({ where: { status: 'PENDING' } }),
       prisma.appointment.count({ where: { status: 'APPROVED' } }),
       prisma.appointment.count({ where: { status: 'COMPLETED' } }),
-      prisma.medicine.count({
-        where: {
-          quantity: { lte: prisma.medicine.fields.minStock ? undefined : 10 },
-          isActive: true,
-        },
+      prisma.medicine.findMany({
+        where: { isActive: true },
+        select: { quantity: true, minStock: true },
       }),
       prisma.appointment.findMany({
         take: 10,
@@ -89,6 +88,7 @@ export async function GET() {
           pet: {
             select: {
               id: true,
+              registrationNo: true,
               name: true,
               species: true,
               breed: true,
@@ -100,6 +100,12 @@ export async function GET() {
         },
       }),
     ]);
+
+    const lowStockMedicines = (medicinesForLowStock as { quantity: string; minStock: string }[]).filter((m) => {
+      const q = parseQuantityNumber(m.quantity);
+      const min = parseQuantityNumber(m.minStock);
+      return q <= min;
+    }).length;
 
     // Get appointment stats by service type
     const serviceStats = await prisma.appointment.groupBy({

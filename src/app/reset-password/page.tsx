@@ -25,6 +25,7 @@ function ResetPasswordForm() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!token) {
       setTokenValid(false);
@@ -42,6 +43,7 @@ function ResetPasswordForm() {
         setTokenError('Could not validate token');
       });
   }, [token]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

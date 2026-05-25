@@ -40,7 +40,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password?token=${rawToken}`;
+    // Build the reset URL using the actual request origin so it works on any host
+    // (prevents the localhost-in-email bug when deployed to Vercel/Render/etc.)
+    const origin =
+      request.headers.get('x-forwarded-host')
+        ? `${request.headers.get('x-forwarded-proto') || 'https'}://${request.headers.get('x-forwarded-host')}`
+        : request.headers.get('origin') ||
+          process.env.NEXT_PUBLIC_APP_URL ||
+          'http://localhost:3000';
+    const resetUrl = `${origin}/reset-password?token=${rawToken}`;
 
     // Send email using Nodemailer
     const mailResult = await sendPasswordResetEmail({

@@ -6,7 +6,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import Card from '@/components/ui/Card';
-import { Dog, Calendar, Bell, MessageSquare, Plus, ArrowRight, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { Dog, Calendar, MessageSquare, Plus, ArrowRight, Clock } from 'lucide-react';
 import { formatDate, getStatusColor, getServiceLabel } from '@/lib/utils';
 import Button from '@/components/ui/Button';
 
@@ -54,9 +54,6 @@ export default function DashboardPage() {
   }, []);
 
   const pendingAppointments = appointments.filter(a => a.status === 'PENDING').length;
-  const upcomingAppointments = appointments.filter(a => 
-    a.status === 'APPROVED' && new Date(a.date) >= new Date()
-  );
 
   const stats = [
     {

@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import { Plus, Trash2, Edit2, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { formatDate } from '@/lib/utils';
+import { formatDate, parseQuantityNumber } from '@/lib/utils';
 
 interface Vaccination {
   id: string;
@@ -90,10 +91,15 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
     notes: '',
   });
 
-  const [availableMedicines, setAvailableMedicines] = useState<any[]>([]);
+  interface Medicine { id: string; name: string; quantity: string | number; unit: string; batchNumber?: string; category?: string; }
+  const [availableMedicines, setAvailableMedicines] = useState<Medicine[]>([]);
   const [prescribedStock, setPrescribedStock] = useState<{ medicineId: string; name: string; quantity: number; unit: string }[]>([]);
   const [selectedMedId, setSelectedMedId] = useState<string>('');
   const [medQty, setMedQty] = useState<string>('');
+  
+  const [prescribedVaccinesStock, setPrescribedVaccinesStock] = useState<{ medicineId: string; name: string; quantity: number; unit: string }[]>([]);
+  const [selectedVaccineMedId, setSelectedVaccineMedId] = useState<string>('');
+  const [vaccineMedQty, setVaccineMedQty] = useState<string>('');
 
   const fetchAvailableMedicines = async () => {
     try {
@@ -105,14 +111,19 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
     }
   };
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (showMedicalForm) {
-      void fetchAvailableMedicines();
+    if (showMedicalForm || showVaccinationForm) {
+      fetchAvailableMedicines().catch(console.error);
       setPrescribedStock([]);
       setSelectedMedId('');
       setMedQty('');
+      setPrescribedVaccinesStock([]);
+      setSelectedVaccineMedId('');
+      setVaccineMedQty('');
     }
-  }, [showMedicalForm]);
+  }, [showMedicalForm, showVaccinationForm]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleAddStockMed = () => {
     if (!selectedMedId) {
@@ -128,7 +139,8 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
     const med = availableMedicines.find(m => m.id === selectedMedId);
     if (!med) return;
 
-    if (med.quantity < qty) {
+    const availableQty = parseQuantityNumber(med.quantity);
+    if (availableQty < qty) {
       toast.error(`Insufficient stock! Available: ${med.quantity} ${med.unit}`);
       return;
     }
@@ -136,7 +148,7 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
     const existingIdx = prescribedStock.findIndex(item => item.medicineId === selectedMedId);
     if (existingIdx > -1) {
       const newQty = prescribedStock[existingIdx].quantity + qty;
-      if (med.quantity < newQty) {
+      if (availableQty < newQty) {
         toast.error(`Cannot add. Combined quantity (${newQty}) exceeds stock (${med.quantity} ${med.unit})`);
         return;
       }
@@ -163,33 +175,82 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
     setPrescribedStock(prescribedStock.filter(item => item.medicineId !== medicineId));
   };
 
-  const fetchPetDetails = async () => {
-    if (!petId) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/admin/pets/${petId}`);
-      const data = await res.json();
-      setPet(data.pet);
-      setPetForm({
-        weight: data.pet.weight?.toString() || '',
-        allergies: data.pet.allergies || '',
-        complications: data.pet.complications || '',
-      });
-    } catch (error) {
-      toast.error('Failed to load pet details');
-    } finally {
-      setLoading(false);
+  const handleAddVaccineStockMed = () => {
+    if (!selectedVaccineMedId) {
+      toast.error('Please select a vaccine');
+      return;
     }
+    const qty = parseInt(vaccineMedQty);
+    if (isNaN(qty) || qty <= 0) {
+      toast.error('Please enter a valid quantity');
+      return;
+    }
+
+    const med = availableMedicines.find(m => m.id === selectedVaccineMedId);
+    if (!med) return;
+
+    const availableQty = parseQuantityNumber(med.quantity);
+    if (availableQty < qty) {
+      toast.error(`Insufficient stock! Available: ${med.quantity} ${med.unit}`);
+      return;
+    }
+
+    const existingIdx = prescribedVaccinesStock.findIndex(item => item.medicineId === selectedVaccineMedId);
+    if (existingIdx > -1) {
+      const newQty = prescribedVaccinesStock[existingIdx].quantity + qty;
+      if (availableQty < newQty) {
+        toast.error(`Cannot add. Combined quantity (${newQty}) exceeds stock (${med.quantity} ${med.unit})`);
+        return;
+      }
+      const updated = [...prescribedVaccinesStock];
+      updated[existingIdx].quantity = newQty;
+      setPrescribedVaccinesStock(updated);
+    } else {
+      setPrescribedVaccinesStock([
+        ...prescribedVaccinesStock,
+        {
+          medicineId: med.id,
+          name: med.name,
+          quantity: qty,
+          unit: med.unit,
+        }
+      ]);
+    }
+
+    // Auto-fill vaccination form vaccineName and batchNumber
+    setVaccinationForm(prev => ({
+      ...prev,
+      vaccineName: prev.vaccineName || med.name,
+      batchNumber: prev.batchNumber || med.batchNumber || '',
+    }));
+
+    setSelectedVaccineMedId('');
+    setVaccineMedQty('');
   };
 
+  const handleRemoveVaccineStockMed = (medicineId: string) => {
+    setPrescribedVaccinesStock(prescribedVaccinesStock.filter(item => item.medicineId !== medicineId));
+  };
+
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (isOpen && petId) {
-      const loadPetDetails = async () => {
-        await fetchPetDetails();
-      };
-      void loadPetDetails();
+      setLoading(true);
+      fetch(`/api/admin/pets/${petId}`)
+        .then(r => r.json())
+        .then(data => {
+          setPet(data.pet);
+          setPetForm({
+            weight: data.pet.weight?.toString() || '',
+            allergies: data.pet.allergies || '',
+            complications: data.pet.complications || '',
+          });
+        })
+        .catch(() => toast.error('Failed to load pet details'))
+        .finally(() => setLoading(false));
     }
   }, [isOpen, petId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleUpdatePet = async () => {
     if (!pet) return;
@@ -209,7 +270,7 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
       setPet(data.pet);
       setEditingPetInfo(false);
       toast.success('Pet updated successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to update pet');
     }
   };
@@ -220,14 +281,46 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
       return;
     }
 
+    // Auto-add if they selected a stock medicine but forgot to click "+ Add to Prescription"
+    const finalPrescribed = [...prescribedVaccinesStock];
+    if (selectedVaccineMedId && vaccineMedQty) {
+      const qty = parseInt(vaccineMedQty);
+      const med = availableMedicines.find(m => m.id === selectedVaccineMedId);
+      if (med && !isNaN(qty) && qty > 0) {
+        const availableQty = parseQuantityNumber(med.quantity);
+        if (availableQty >= qty) {
+          const existingIdx = finalPrescribed.findIndex(item => item.medicineId === selectedVaccineMedId);
+          if (existingIdx > -1) {
+            finalPrescribed[existingIdx].quantity += qty;
+          } else {
+            finalPrescribed.push({
+              medicineId: med.id,
+              name: med.name,
+              quantity: qty,
+              unit: med.unit,
+            });
+          }
+        }
+      }
+    }
+
     try {
       const res = await fetch(`/api/admin/pets/${pet.id}/vaccinations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(vaccinationForm),
+        body: JSON.stringify({
+          ...vaccinationForm,
+          prescribedMedicines: finalPrescribed.map(item => ({
+            medicineId: item.medicineId,
+            quantity: item.quantity,
+          })),
+        }),
       });
 
-      if (!res.ok) throw new Error('Failed to add vaccination');
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to add vaccination');
+      }
       const data = await res.json();
       setPet(data.pet);
       setVaccinationForm({
@@ -238,10 +331,11 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
         veterinarian: '',
         notes: '',
       });
+      setPrescribedVaccinesStock([]);
       setShowVaccinationForm(false);
       toast.success('Vaccination added successfully');
-    } catch (error) {
-      toast.error('Failed to add vaccination');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add vaccination');
     }
   };
 
@@ -259,7 +353,7 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
       const data = await res.json();
       setPet(data.pet);
       toast.success('Vaccination deleted successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete vaccination');
     }
   };
@@ -270,13 +364,36 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
       return;
     }
 
+    // Auto-add if they selected a stock medicine but forgot to click "+ Add to Prescription"
+    const finalPrescribed = [...prescribedStock];
+    if (selectedMedId && medQty) {
+      const qty = parseInt(medQty);
+      const med = availableMedicines.find(m => m.id === selectedMedId);
+      if (med && !isNaN(qty) && qty > 0) {
+        const availableQty = parseQuantityNumber(med.quantity);
+        if (availableQty >= qty) {
+          const existingIdx = finalPrescribed.findIndex(item => item.medicineId === selectedMedId);
+          if (existingIdx > -1) {
+            finalPrescribed[existingIdx].quantity += qty;
+          } else {
+            finalPrescribed.push({
+              medicineId: med.id,
+              name: med.name,
+              quantity: qty,
+              unit: med.unit,
+            });
+          }
+        }
+      }
+    }
+
     try {
       const res = await fetch(`/api/admin/pets/${pet.id}/medical-records`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...medicalForm,
-          prescribedMedicines: prescribedStock.map(item => ({
+          prescribedMedicines: finalPrescribed.map(item => ({
             medicineId: item.medicineId,
             quantity: item.quantity,
           })),
@@ -302,8 +419,8 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
       setPrescribedStock([]);
       setShowMedicalForm(false);
       toast.success('Treatment record added successfully');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to add treatment record');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add treatment record');
     }
   };
 
@@ -321,7 +438,7 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
       const data = await res.json();
       setPet(data.pet);
       toast.success('Treatment record deleted successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete treatment record');
     }
   };
@@ -546,6 +663,76 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
                   value={vaccinationForm.batchNumber}
                   onChange={(e) => setVaccinationForm({ ...vaccinationForm, batchNumber: e.target.value })}
                 />
+
+                {/* Stock Prescription Section */}
+                <div className="space-y-3 p-4 rounded-xl bg-[var(--color-bg)] border border-[var(--color-border)]">
+                  <h5 className="text-sm font-semibold text-[var(--color-text)]">Prescribe from Clinic Stock</h5>
+                  
+                  <div className="grid sm:grid-cols-3 gap-3 items-end">
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <label className="block text-xs font-medium text-[var(--color-text-secondary)]">Select Vaccine</label>
+                      <SearchableSelect
+                        placeholder="Search & select vaccine..."
+                        value={selectedVaccineMedId}
+                        onChange={(val) => setSelectedVaccineMedId(val)}
+                        options={availableMedicines
+                          .filter(med => med.category && med.category.toLowerCase() === 'injection')
+                          .map(med => ({
+                            id: med.id,
+                            name: med.name,
+                            label: `${med.name} (${med.quantity} ${med.unit} in stock)`,
+                            disabled: parseQuantityNumber(med.quantity) <= 0
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-medium text-[var(--color-text-secondary)]">Quantity</label>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Qty"
+                        value={vaccineMedQty}
+                        onChange={(e) => setVaccineMedQty(e.target.value)}
+                        className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/40 focus:border-[var(--color-primary)] transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAddVaccineStockMed}
+                    className="flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-medium bg-[var(--color-primary)]/10 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 rounded-lg transition-colors"
+                  >
+                    <Plus size={14} /> Add to Prescription
+                  </button>
+
+                  {/* List of currently prescribed stock medicines */}
+                  {prescribedVaccinesStock.length > 0 && (
+                    <div className="pt-2 border-t border-[var(--color-border)] space-y-2">
+                      <p className="text-xs font-medium text-[var(--color-text-secondary)]">Selected Stock Vaccines:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {prescribedVaccinesStock.map((item) => (
+                          <span
+                            key={item.medicineId}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-medium text-[var(--color-text)]"
+                          >
+                            {item.name} ({item.quantity} {item.unit})
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveVaccineStockMed(item.medicineId)}
+                              className="text-red-500 hover:text-red-700 font-bold ml-1 transition-colors"
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <Input
                   label="Veterinarian"
                   value={vaccinationForm.veterinarian}
@@ -675,18 +862,17 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
                   <div className="grid sm:grid-cols-3 gap-3 items-end">
                     <div className="space-y-1.5 sm:col-span-2">
                       <label className="block text-xs font-medium text-[var(--color-text-secondary)]">Select Medicine</label>
-                      <select
+                      <SearchableSelect
+                        placeholder="Search & select medicine..."
                         value={selectedMedId}
-                        onChange={(e) => setSelectedMedId(e.target.value)}
-                        className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/40 focus:border-[var(--color-primary)] transition-all"
-                      >
-                        <option value="">Select medicine from stock...</option>
-                        {availableMedicines.map((med) => (
-                          <option key={med.id} value={med.id} disabled={med.quantity <= 0}>
-                            {med.name} ({med.quantity} {med.unit} in stock)
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(val) => setSelectedMedId(val)}
+                        options={availableMedicines.map(med => ({
+                          id: med.id,
+                          name: med.name,
+                          label: `${med.name} (${med.quantity} ${med.unit} in stock)`,
+                          disabled: parseQuantityNumber(med.quantity) <= 0
+                        }))}
+                      />
                     </div>
 
                     <div className="space-y-1.5">

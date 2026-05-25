@@ -9,7 +9,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import {
   LayoutDashboard, Calendar, Dog, Users, Pill,
-  LogOut, Menu, ChevronRight, Shield, Bell, PawPrint, Mail
+  LogOut, Menu, ChevronRight, Shield, PawPrint, Mail
 } from 'lucide-react';
 
 const adminLinks = [

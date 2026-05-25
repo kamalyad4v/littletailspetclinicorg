@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Heart, Users, Clock, Stethoscope, ShieldCheck, Award } from 'lucide-react';
+import { Heart, Clock, Stethoscope, ShieldCheck } from 'lucide-react';
 
 export default function About() {
   const features = [

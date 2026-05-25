@@ -8,7 +8,7 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Modal from '@/components/ui/Modal';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { Plus, Pencil, Trash2, Syringe, FileText, AlertTriangle, Calendar } from 'lucide-react';
+import { Plus, Pencil, Trash2, Syringe, FileText, AlertTriangle } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
