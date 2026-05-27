@@ -2,13 +2,13 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Modal from '@/components/ui/Modal';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { Plus, Pencil, Trash2, AlertTriangle, Package } from 'lucide-react';
+import { Plus, Pencil, Trash2, AlertTriangle, Package, AlertCircle, Search } from 'lucide-react';
 import { formatDate, parseQuantityNumber } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -28,31 +28,63 @@ interface Medicine {
 
 export default function AdminMedicinePage() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [allMedicines, setAllMedicines] = useState<Medicine[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const searchRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [search, setSearch] = useState('');
   const [formData, setFormData] = useState({
     name: '', category: '', description: '', quantity: '',
     unit: 'tablets', price: 0, expiryDate: '', manufacturer: '',
     batchNumber: '', minStock: '10',
   });
 
-  const fetchMedicines = async () => {
+  const fetchMedicines = async (query = '') => {
     try {
-      const res = await fetch('/api/admin/medicine');
+      const res = await fetch(`/api/admin/medicine?search=${encodeURIComponent(query)}`);
       const data = await res.json();
       setMedicines(data.medicines || []);
     } catch { toast.error('Failed to load'); }
     finally { setLoading(false); }
   };
 
+  const fetchAllMedicines = async () => {
+    try {
+      const res = await fetch('/api/admin/medicine');
+      const data = await res.json();
+      setAllMedicines(data.medicines || []);
+    } catch {
+      // quiet fail
+    }
+  };
+
   useEffect(() => {
     const loadMedicines = async () => {
       await fetchMedicines();
+      await fetchAllMedicines();
     };
     void loadMedicines();
   }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    fetchMedicines(search);
+  };
 
   const resetForm = () => {
     setFormData({
@@ -96,7 +128,8 @@ export default function AdminMedicinePage() {
       setShowModal(false);
       setEditingMedicine(null);
       resetForm();
-      fetchMedicines();
+      fetchMedicines(search);
+      void fetchAllMedicines();
     } catch { toast.error('Failed to save'); }
     finally { setFormLoading(false); }
   };
@@ -106,12 +139,109 @@ export default function AdminMedicinePage() {
     try {
       await fetch(`/api/admin/medicine/${id}`, { method: 'DELETE' });
       toast.success('Medicine deleted');
-      fetchMedicines();
+      fetchMedicines(search);
+      void fetchAllMedicines();
     } catch { toast.error('Failed to delete'); }
   };
 
+  const [showExpiringOnly, setShowExpiringOnly] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('filter') === 'expiring') {
+        setShowExpiringOnly(true);
+      }
+    }
+  }, []);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const thirtyDaysFromNow = new Date();
+  thirtyDaysFromNow.setDate(today.getDate() + 30);
+
+  const expiringSoonMeds = medicines.filter(m => {
+    if (!m.expiryDate) return false;
+    const expiry = new Date(m.expiryDate);
+    return expiry <= thirtyDaysFromNow;
+  });
+
   const lowStockMeds = medicines.filter(m => parseQuantityNumber(m.quantity) <= parseQuantityNumber(m.minStock));
   const categories = [...new Set(medicines.map(m => m.category))];
+
+  const displayedMedicines = medicines.filter(m => {
+    // 1. Expiry filter
+    const matchesExpiry = showExpiringOnly ? (
+      m.expiryDate ? new Date(m.expiryDate) <= thirtyDaysFromNow : false
+    ) : true;
+
+    return matchesExpiry;
+  });
+
+  // Get unique suggestions by name
+  const filteredSuggestions = (() => {
+    if (search.trim().length === 0) return [];
+    const query = search.toLowerCase();
+    const seen = new Set<string>();
+    const matches: Medicine[] = [];
+    
+    for (const med of allMedicines) {
+      const matchName = med.name.toLowerCase().includes(query);
+      const matchCat = med.category.toLowerCase().includes(query);
+      const matchMan = med.manufacturer ? med.manufacturer.toLowerCase().includes(query) : false;
+      
+      if (matchName || matchCat || matchMan) {
+        const uniqueKey = `${med.name.toLowerCase()}-${med.category.toLowerCase()}`;
+        if (!seen.has(uniqueKey)) {
+          seen.add(uniqueKey);
+          matches.push(med);
+        }
+      }
+    }
+    return matches.slice(0, 8);
+  })();
+
+  const selectSuggestion = (med: Medicine) => {
+    setSearch(med.name);
+    setShowSuggestions(false);
+    setLoading(true);
+    fetchMedicines(med.name);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showSuggestions && filteredSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlightedIndex((prev) => (prev + 1) % filteredSuggestions.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlightedIndex((prev) => (prev - 1 + filteredSuggestions.length) % filteredSuggestions.length);
+      } else if (e.key === 'Enter') {
+        if (highlightedIndex >= 0 && highlightedIndex < filteredSuggestions.length) {
+          e.preventDefault();
+          selectSuggestion(filteredSuggestions[highlightedIndex]);
+        }
+      } else if (e.key === 'Escape') {
+        setShowSuggestions(false);
+      }
+    }
+  };
+
+  const renderHighlightedText = (text: string, query: string) => {
+    if (!query) return <span>{text}</span>;
+    const index = text.toLowerCase().indexOf(query.toLowerCase());
+    if (index === -1) return <span>{text}</span>;
+    const before = text.substring(0, index);
+    const match = text.substring(index, index + query.length);
+    const after = text.substring(index + query.length);
+    return (
+      <span className="text-[var(--color-text-secondary)] font-normal">
+        {before}
+        <span className="font-semibold text-[var(--color-text)]">{match}</span>
+        {after}
+      </span>
+    );
+  };
 
   if (loading) return <LoadingSpinner size="lg" />;
 
@@ -142,8 +272,31 @@ export default function AdminMedicinePage() {
         </Card>
       )}
 
+      {/* Expiring Soon Alert */}
+      {expiringSoonMeds.length > 0 && (
+        <Card className="border-red-300 bg-red-50/50">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <AlertCircle size={20} className="text-red-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-red-800">Expiring Soon Alert</p>
+                <p className="text-xs text-red-700">
+                  {expiringSoonMeds.length} medicine(s) are expiring soon: {expiringSoonMeds.map(m => `${m.name} (${m.expiryDate ? formatDate(m.expiryDate) : ''})`).join(', ')}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowExpiringOnly(!showExpiringOnly)}
+              className="text-xs font-semibold text-red-700 hover:text-red-900 underline shrink-0"
+            >
+              {showExpiringOnly ? 'Show All Medicines' : 'Filter Expiring Soon'}
+            </button>
+          </div>
+        </Card>
+      )}
+
       {/* Stock Summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <Card>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
@@ -177,6 +330,23 @@ export default function AdminMedicinePage() {
             </div>
           </div>
         </Card>
+        <Card 
+          className={`cursor-pointer transition-all ${showExpiringOnly ? 'ring-2 ring-red-500 bg-red-50/20' : 'hover:bg-red-50/10'}`}
+          onClick={() => setShowExpiringOnly(!showExpiringOnly)}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center relative">
+              <AlertCircle size={20} className="text-red-500" />
+              {expiringSoonMeds.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse border border-white" />
+              )}
+            </div>
+            <div>
+              <p className="text-xl font-bold text-[var(--color-text)]">{expiringSoonMeds.length}</p>
+              <p className="text-xs text-[var(--color-text-secondary)]">Expiring Soon</p>
+            </div>
+          </div>
+        </Card>
         <Card>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
@@ -192,11 +362,73 @@ export default function AdminMedicinePage() {
         </Card>
       </div>
 
+      {/* Search Bar */}
+      <form onSubmit={handleSearch} className="flex gap-3 relative z-30" ref={searchRef}>
+        <div className="flex-1 relative">
+          <Input
+            placeholder="Search by name, category, or manufacturer..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setShowSuggestions(true);
+              setHighlightedIndex(-1);
+            }}
+            onFocus={() => {
+              setShowSuggestions(true);
+              setHighlightedIndex(-1);
+            }}
+            onKeyDown={handleKeyDown}
+            icon={<Search size={18} />}
+          />
+
+          {/* Suggestions Dropdown */}
+          {showSuggestions && filteredSuggestions.length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xl overflow-hidden max-h-[320px] overflow-y-auto backdrop-blur-md bg-white/95">
+              {filteredSuggestions.map((med, index) => (
+                <div
+                  key={med.id}
+                  onClick={() => selectSuggestion(med)}
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  className={`px-4 py-3 cursor-pointer flex items-center justify-between transition-colors ${
+                    highlightedIndex === index
+                      ? 'bg-[var(--color-bg)]'
+                      : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Search size={16} className="text-[var(--color-text-secondary)] shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-[var(--color-text)]">
+                        {renderHighlightedText(med.name, search)}
+                      </span>
+                      {med.manufacturer && (
+                        <span className="text-xs text-[var(--color-text-secondary)]">
+                          {med.manufacturer}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-50 text-[#1565C0] shrink-0 border border-blue-100">
+                    {med.category}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <button type="submit" className="px-6 py-3 rounded-xl bg-[var(--color-primary)] text-white font-medium hover:bg-[var(--color-primary-dark)] transition-colors shadow-md shadow-blue-500/10">
+          Search
+        </button>
+      </form>
+
+
       {/* Medicines Table */}
-      {medicines.length === 0 ? (
+      {displayedMedicines.length === 0 ? (
         <Card className="text-center py-12">
           <Package size={48} className="mx-auto text-[var(--color-text-secondary)] mb-4" />
-          <p className="text-[var(--color-text-secondary)]">No medicines in stock</p>
+          <p className="text-[var(--color-text-secondary)]">
+            {showExpiringOnly ? 'No medicines are about to expire' : 'No medicines in stock'}
+          </p>
         </Card>
       ) : (
         <div className="overflow-x-auto">
@@ -213,7 +445,7 @@ export default function AdminMedicinePage() {
               </tr>
             </thead>
             <tbody>
-              {medicines.map((med) => (
+              {displayedMedicines.map((med) => (
                 <tr key={med.id} className="bg-[var(--color-surface)] border-x border-b border-[var(--color-border)]">
                   <td className="px-4 py-4">
                     <p className="text-sm font-medium text-[var(--color-text)]">{med.name}</p>
@@ -227,7 +459,14 @@ export default function AdminMedicinePage() {
                   <td className="px-4 py-4 text-sm text-[var(--color-text)]">{med.quantity} {med.unit}</td>
                   <td className="px-4 py-4 text-sm text-[var(--color-text)]">₹{med.price.toFixed(2)}</td>
                   <td className="px-4 py-4 text-sm text-[var(--color-text-secondary)]">
-                    {med.expiryDate ? formatDate(med.expiryDate) : '-'}
+                    {med.expiryDate ? (
+                      <span className={new Date(med.expiryDate) <= thirtyDaysFromNow ? 'text-red-600 font-semibold flex items-center gap-1.5' : ''}>
+                        {new Date(med.expiryDate) <= thirtyDaysFromNow && (
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                        )}
+                        {formatDate(med.expiryDate)}
+                      </span>
+                    ) : '-'}
                   </td>
                   <td className="px-4 py-4">
                     <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${

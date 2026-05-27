@@ -27,10 +27,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [expiringCount, setExpiringCount] = useState(0);
 
   useEffect(() => {
     const markMounted = () => setMounted(true);
     markMounted();
+
+    async function fetchExpiringCount() {
+      try {
+        const res = await fetch('/api/admin/medicine/expiring-count');
+        const data = await res.json();
+        setExpiringCount(data.count || 0);
+      } catch (error) {
+        console.error('Failed to load expiring count:', error);
+      }
+    }
+    void fetchExpiringCount();
   }, []);
 
   if (!mounted || loading) {
@@ -108,6 +120,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     className={isActive ? 'text-[#1565C0]' : 'transition-transform duration-200 group-hover:scale-110'}
                   />
                   <span>{link.label}</span>
+                  {link.href === '/admin/medicine' && expiringCount > 0 && (
+                    <span className="ml-auto w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse border border-white" title={`${expiringCount} medicine(s) expiring soon!`} />
+                  )}
                   {'badge' in link && link.badge && !isActive && (
                     <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gradient-to-r from-[#1565C0] to-[#42A5F5] text-white animate-pulse">
                       {link.badge}

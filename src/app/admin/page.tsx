@@ -45,6 +45,7 @@ interface DashboardData {
     approvedAppointments: number;
     completedAppointments: number;
     lowStockMedicines: number;
+    expiringMedicinesCount: number;
   };
   recentAppointments: Array<{
     id: string;
@@ -98,6 +99,7 @@ export default function AdminDashboardPage() {
   const stats = data?.stats || {
     totalUsers: 0, totalPets: 0, totalAppointments: 0,
     pendingAppointments: 0, approvedAppointments: 0, completedAppointments: 0, lowStockMedicines: 0,
+    expiringMedicinesCount: 0,
   };
 
   const todaysAppointments = data?.todaysAppointments || [];
@@ -160,7 +162,7 @@ export default function AdminDashboardPage() {
     { label: 'Total Appointments', value: stats.totalAppointments, icon: <Calendar size={24} />, bg: 'bg-blue-50 border border-blue-100', iconColor: 'text-[#1565C0]', href: '/admin/appointments' },
     { label: 'Pending Review', value: stats.pendingAppointments, icon: <Clock size={24} />, bg: 'bg-amber-50 border border-amber-100', iconColor: 'text-amber-600', href: '/admin/appointments' },
     { label: 'Approved', value: stats.approvedAppointments, icon: <CheckCircle size={24} />, bg: 'bg-green-50 border border-green-100', iconColor: 'text-[#2E7D32]', href: '/admin/appointments' },
-    { label: 'Completed', value: stats.completedAppointments, icon: <TrendingUp size={24} />, bg: 'bg-red-50 border border-red-100', iconColor: 'text-[#E53935]', href: '/admin/appointments' },
+    { label: 'About to Expire', value: stats.expiringMedicinesCount || 0, icon: <AlertCircle size={24} />, bg: (stats.expiringMedicinesCount || 0) > 0 ? 'bg-red-50 border border-red-100 relative' : 'bg-blue-50 border border-blue-100', iconColor: (stats.expiringMedicinesCount || 0) > 0 ? 'text-red-600' : 'text-[#1565C0]', href: '/admin/medicine?filter=expiring' },
   ];
 
   return (
@@ -296,6 +298,9 @@ export default function AdminDashboardPage() {
         {statCards.map((stat) => (
           <Link key={stat.label} href={stat.href}>
             <Card hover className="relative overflow-hidden shadow-sm">
+              {stat.label === 'About to Expire' && stat.value > 0 && (
+                <span className="absolute top-3.5 right-3.5 w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse border border-white" />
+              )}
               <div className={`w-12 h-12 rounded-xl ${stat.bg} flex items-center justify-center mb-3`}>
                 <span className={stat.iconColor}>{stat.icon}</span>
               </div>

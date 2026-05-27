@@ -52,12 +52,14 @@ interface PetDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   petId?: string;
+  onRefresh?: () => void;
 }
 
-export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModalProps) {
+export default function PetDetailModal({ isOpen, onClose, petId, onRefresh }: PetDetailModalProps) {
   const [pet, setPet] = useState<PetDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [editingPetInfo, setEditingPetInfo] = useState(false);
+  const [editingBasicInfo, setEditingBasicInfo] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'vaccinations' | 'treatment'>('info');
 
   // Pet form state
@@ -65,6 +67,17 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
     weight: '',
     allergies: '',
     complications: '',
+  });
+
+  // Basic info form state
+  const [basicForm, setBasicForm] = useState({
+    name: '',
+    species: 'Dog',
+    breed: '',
+    age: '',
+    gender: 'MALE',
+    color: '',
+    microchipId: '',
   });
 
   // Vaccination form state
@@ -245,6 +258,15 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
             allergies: data.pet.allergies || '',
             complications: data.pet.complications || '',
           });
+          setBasicForm({
+            name: data.pet.name || '',
+            species: data.pet.species || 'Dog',
+            breed: data.pet.breed || '',
+            age: data.pet.age?.toString() || '',
+            gender: data.pet.gender || 'MALE',
+            color: data.pet.color || '',
+            microchipId: data.pet.microchipId || '',
+          });
         })
         .catch(() => toast.error('Failed to load pet details'))
         .finally(() => setLoading(false));
@@ -270,8 +292,60 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
       setPet(data.pet);
       setEditingPetInfo(false);
       toast.success('Pet updated successfully');
+      if (onRefresh) onRefresh();
     } catch {
       toast.error('Failed to update pet');
+    }
+  };
+
+  const handleUpdateBasicPet = async () => {
+    if (!pet) return;
+    if (!basicForm.name || !basicForm.species || !basicForm.breed || !basicForm.age) {
+      toast.error('Please fill all required fields');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/pets/${pet.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: basicForm.name,
+          species: basicForm.species,
+          breed: basicForm.breed,
+          age: parseInt(basicForm.age),
+          gender: basicForm.gender,
+          color: basicForm.color || null,
+          microchipId: basicForm.microchipId || null,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Failed to update basic information');
+      const data = await res.json();
+      setPet(data.pet);
+      setEditingBasicInfo(false);
+      toast.success('Pet basic information updated successfully');
+      if (onRefresh) onRefresh();
+    } catch {
+      toast.error('Failed to update pet basic information');
+    }
+  };
+
+  const handleDeletePet = async () => {
+    if (!pet) return;
+    if (!confirm(`Are you sure you want to delete ${pet.name}? This will remove all their medical and vaccination records.`)) return;
+
+    try {
+      const res = await fetch(`/api/admin/pets/${pet.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) throw new Error('Failed to delete pet');
+      toast.success('Pet deleted successfully');
+      onClose();
+      if (onRefresh) onRefresh();
+    } catch {
+      toast.error('Failed to delete pet');
     }
   };
 
@@ -492,39 +566,142 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
           <div className="space-y-6">
             {/* Basic Info */}
             <div>
-              <h3 className="text-lg font-bold text-[var(--color-text)] mb-4">Basic Information</h3>
-              <div className="grid sm:grid-cols-2 gap-4 p-4 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)]">
+              {editingBasicInfo ? (
                 <div>
-                  <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Name</label>
-                  <p className="text-[var(--color-text)] font-medium">{pet.name}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Species</label>
-                  <p className="text-[var(--color-text)] font-medium">{pet.species}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Breed</label>
-                  <p className="text-[var(--color-text)] font-medium">{pet.breed}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Age</label>
-                  <p className="text-[var(--color-text)] font-medium">{pet.age} years</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Gender</label>
-                  <p className="text-[var(--color-text)] font-medium">{pet.gender}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Color</label>
-                  <p className="text-[var(--color-text)] font-medium">{pet.color || 'N/A'}</p>
-                </div>
-                {pet.microchipId && (
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Microchip ID</label>
-                    <p className="text-[var(--color-text)] font-medium font-mono text-sm">{pet.microchipId}</p>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-[var(--color-text)]">Basic Information</h3>
+                    <button
+                      onClick={() => setEditingBasicInfo(false)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-[var(--color-primary)]/10 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-colors"
+                    >
+                      <X size={16} /> Cancel
+                    </button>
                   </div>
-                )}
-              </div>
+
+                  <div className="space-y-4 p-4 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)]">
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <Input
+                        label="Pet Name *"
+                        value={basicForm.name}
+                        onChange={(e) => setBasicForm({ ...basicForm, name: e.target.value })}
+                        required
+                      />
+                      <div className="space-y-1.5">
+                        <label className="block text-sm font-medium text-[var(--color-text)]">Species *</label>
+                        <select
+                          className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/40 focus:border-[var(--color-primary)] transition-all"
+                          value={basicForm.species}
+                          onChange={(e) => setBasicForm({ ...basicForm, species: e.target.value })}
+                        >
+                          {['Dog', 'Cat', 'Bird', 'Rabbit', 'Fish', 'Hamster', 'Turtle', 'Other'].map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <Input
+                        label="Breed *"
+                        value={basicForm.breed}
+                        onChange={(e) => setBasicForm({ ...basicForm, breed: e.target.value })}
+                        required
+                      />
+                      <div className="space-y-1.5">
+                        <label className="block text-sm font-medium text-[var(--color-text)]">Gender *</label>
+                        <select
+                          className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/40 focus:border-[var(--color-primary)] transition-all"
+                          value={basicForm.gender}
+                          onChange={(e) => setBasicForm({ ...basicForm, gender: e.target.value })}
+                        >
+                          <option value="MALE">Male</option>
+                          <option value="FEMALE">Female</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid sm:grid-cols-3 gap-4">
+                      <Input
+                        label="Age (years) *"
+                        type="number"
+                        min="0"
+                        value={basicForm.age}
+                        onChange={(e) => setBasicForm({ ...basicForm, age: e.target.value })}
+                        required
+                      />
+                      <Input
+                        label="Color"
+                        value={basicForm.color}
+                        onChange={(e) => setBasicForm({ ...basicForm, color: e.target.value })}
+                      />
+                      <Input
+                        label="Microchip ID"
+                        value={basicForm.microchipId}
+                        onChange={(e) => setBasicForm({ ...basicForm, microchipId: e.target.value })}
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleUpdateBasicPet}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white font-medium hover:bg-[var(--color-primary-dark)] transition-colors"
+                    >
+                      <Save size={18} /> Save Changes
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-[var(--color-text)]">Basic Information</h3>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setEditingBasicInfo(true)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-[var(--color-primary)]/10 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-colors"
+                      >
+                        <Edit2 size={16} /> Edit Details
+                      </button>
+                      <button
+                        onClick={handleDeletePet}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                      >
+                        <Trash2 size={16} /> Delete Pet
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4 p-4 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)]">
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Name</label>
+                      <p className="text-[var(--color-text)] font-medium">{pet.name}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Species</label>
+                      <p className="text-[var(--color-text)] font-medium">{pet.species}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Breed</label>
+                      <p className="text-[var(--color-text)] font-medium">{pet.breed}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Age</label>
+                      <p className="text-[var(--color-text)] font-medium">{pet.age} years</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Gender</label>
+                      <p className="text-[var(--color-text)] font-medium">{pet.gender}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Color</label>
+                      <p className="text-[var(--color-text)] font-medium">{pet.color || 'N/A'}</p>
+                    </div>
+                    {pet.microchipId && (
+                      <div>
+                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">Microchip ID</label>
+                        <p className="text-[var(--color-text)] font-medium font-mono text-sm">{pet.microchipId}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Editable Health Info */}
@@ -670,20 +847,17 @@ export default function PetDetailModal({ isOpen, onClose, petId }: PetDetailModa
                   
                   <div className="grid sm:grid-cols-3 gap-3 items-end">
                     <div className="space-y-1.5 sm:col-span-2">
-                      <label className="block text-xs font-medium text-[var(--color-text-secondary)]">Select Vaccine</label>
+                      <label className="block text-xs font-medium text-[var(--color-text-secondary)]">Select Medicine</label>
                       <SearchableSelect
-                        placeholder="Search & select vaccine..."
+                        placeholder="Search & select medicine..."
                         value={selectedVaccineMedId}
                         onChange={(val) => setSelectedVaccineMedId(val)}
-                        options={availableMedicines
-                          .filter(med => med.category && med.category.toLowerCase() === 'injection')
-                          .map(med => ({
-                            id: med.id,
-                            name: med.name,
-                            label: `${med.name} (${med.quantity} ${med.unit} in stock)`,
-                            disabled: parseQuantityNumber(med.quantity) <= 0
-                          }))
-                        }
+                        options={availableMedicines.map(med => ({
+                          id: med.id,
+                          name: med.name,
+                          label: `${med.name} (${med.quantity} ${med.unit} in stock)`,
+                          disabled: parseQuantityNumber(med.quantity) <= 0
+                        }))}
                       />
                     </div>
 

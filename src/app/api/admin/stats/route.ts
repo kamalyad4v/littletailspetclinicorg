@@ -24,6 +24,7 @@ export async function GET() {
       approvedAppointments,
       completedAppointments,
       medicinesForLowStock,
+      expiringMedicinesCount,
       recentAppointments,
       recentUsers,
       todaysAppointments,
@@ -38,6 +39,14 @@ export async function GET() {
       prisma.medicine.findMany({
         where: { isActive: true },
         select: { quantity: true, minStock: true },
+      }),
+      prisma.medicine.count({
+        where: {
+          isActive: true,
+          expiryDate: {
+            lte: new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000),
+          },
+        },
       }),
       prisma.appointment.findMany({
         take: 10,
@@ -138,6 +147,7 @@ export async function GET() {
         approvedAppointments,
         completedAppointments,
         lowStockMedicines,
+        expiringMedicinesCount,
       },
       serviceStats,
       monthlyData,

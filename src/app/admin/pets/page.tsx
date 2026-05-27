@@ -167,6 +167,7 @@ export default function AdminPetsPage() {
         isOpen={selectedPetId !== null} 
         onClose={() => setSelectedPetId(null)} 
         petId={selectedPetId || undefined}
+        onRefresh={() => fetchPets(search)}
       />
     </div>
   );

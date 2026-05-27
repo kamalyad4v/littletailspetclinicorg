@@ -3,15 +3,29 @@ import prisma from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 import { medicineSchema } from '@/lib/validators';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getSession();
     if (!session || session.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search') || '';
+
+    const where = search
+      ? {
+          isActive: true,
+          OR: [
+            { name: { contains: search, mode: 'insensitive' as const } },
+            { category: { contains: search, mode: 'insensitive' as const } },
+            { manufacturer: { contains: search, mode: 'insensitive' as const } },
+          ],
+        }
+      : { isActive: true };
+
     const medicines = await prisma.medicine.findMany({
-      where: { isActive: true },
+      where,
       orderBy: { name: 'asc' },
     });
 

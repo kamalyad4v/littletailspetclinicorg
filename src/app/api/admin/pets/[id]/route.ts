@@ -50,15 +50,33 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { weight, allergies, complications } = body;
+    const {
+      name,
+      species,
+      breed,
+      age,
+      gender,
+      color,
+      microchipId,
+      weight,
+      allergies,
+      complications,
+    } = body;
     const { id } = await params;
 
     const pet = await prisma.pet.update({
       where: { id },
       data: {
-        ...(weight !== undefined && { weight: weight ? parseFloat(weight) : null }),
-        ...(allergies !== undefined && { allergies }),
-        ...(complications !== undefined && { complications }),
+        ...(name !== undefined && { name }),
+        ...(species !== undefined && { species }),
+        ...(breed !== undefined && { breed }),
+        ...(age !== undefined && { age: Number(age) }),
+        ...(gender !== undefined && { gender }),
+        ...(color !== undefined && { color: color || null }),
+        ...(microchipId !== undefined && { microchipId: microchipId || null }),
+        ...(weight !== undefined && { weight: weight !== null && weight !== '' ? parseFloat(weight.toString()) : null }),
+        ...(allergies !== undefined && { allergies: allergies || null }),
+        ...(complications !== undefined && { complications: complications || null }),
       },
       include: {
         owner: {
@@ -79,3 +97,29 @@ export async function PUT(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    const { id } = await params;
+    
+    // Soft delete the pet by setting isActive to false
+    await prisma.pet.update({
+      where: { id },
+      data: { isActive: false },
+    });
+
+    return NextResponse.json({ message: 'Pet deleted successfully' });
+  } catch (error) {
+    console.error('Delete pet error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
